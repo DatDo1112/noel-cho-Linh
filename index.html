@@ -66,16 +66,13 @@
 <body>
     <div id="error-log"></div>
     
-    <!-- UI Vandiep -->
     <div id="ui-layer">
-        <!-- Vandiep -->
         <div class="guide">
             🖐 <b>Open:</b> Explode &nbsp;|&nbsp; 🫶 <b>Heart:</b> Love &nbsp;|&nbsp; ✊ <b>Fist:</b> Tree
         </div>
         <button id="btnStart" onclick="startSystem()">START MAGIC</button>
     </div>
 
-    <!-- Vandiep -->
     <div id="copyright">© by vandiep</div>
 
     <div id="canvas-container"></div>
@@ -91,6 +88,7 @@
         bgMusic.loop = true; bgMusic.volume = 1.0;
 
         const loader = new THREE.TextureLoader();
+        // Đảm bảo tên file ảnh trên github đúng y hệt như này
         const photoFiles = ['./image1.jpeg', './image2.jpeg', './image3.jpeg', './image4.jpeg', './image5.jpeg'];
         const photoTextures = [];
         photoFiles.forEach((f, i) => photoTextures[i] = loader.load(f));
@@ -138,7 +136,7 @@
             redCount: 300,
             giftCount: 150,
             explodeRadius: 65,  
-            photoOrbitRadius: 25,
+            photoOrbitRadius: 30, // Tăng nhẹ bán kính xoay để thoáng hơn
             treeHeight: 70,
             treeBaseRadius: 35
         };
@@ -161,7 +159,9 @@
             scene.fog = new THREE.FogExp2(0x000000, 0.002);
 
             camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 1000);
-            camera.position.z = 100;
+            
+            // --- [ĐÃ SỬA] Camera lùi xa hơn để nhìn bao quát ---
+            camera.position.z = 160; 
 
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
             renderer.setSize(window.innerWidth, window.innerHeight);
@@ -266,6 +266,7 @@
         }
 
         function createPhotos() {
+            // Giữ khung vuông 8x8. Hãy crop ảnh thành hình vuông để hiển thị đẹp nhất.
             const geo = new THREE.PlaneGeometry(8, 8);
             const borderGeo = new THREE.PlaneGeometry(9, 9); 
             const borderMat = new THREE.MeshBasicMaterial({ color: 0xFFD700 }); 
@@ -342,26 +343,24 @@
             const targetKey = (targetState === 'TREE') ? 'tree' : (targetState === 'HEART' ? 'heart' : 'explode');
             const targets = group.geometry.userData[(targetState === 'PHOTO') ? 'explode' : targetKey];
 
-            // 1. Vandiep
+            // 1. Position Update
             for(let i=0; i<positions.length; i++) {
                 positions[i] += (targets[i] - positions[i]) * speed;
             }
             group.geometry.attributes.position.needsUpdate = true;
             
-            // 2. COLOR & SIZE Vandiep
+            // 2. Color & Size & Rotation
             const count = positions.length / 3;
             
             if (targetState === 'TREE') {
-                group.rotation.y += 0.003;
+                group.rotation.y += 0.003; // Cây tự xoay nhẹ
                 
                 for(let i=0; i<count; i++) {
                     sizes[i] = baseSize;
                     let brightness = 1.0;
                     if(type === 'red') {
-                        // RED
                         brightness = 0.5 + 0.5 * Math.sin(time * 3 + phases[i]);
                     } else if(type === 'gold') {
-                        // YELLOW
                         brightness = 0.8 + 0.4 * Math.sin(time * 10 + phases[i]);
                     }
                     colors[i*3]   = baseColor.r * brightness;
@@ -376,7 +375,6 @@
                 const beatScale = 1 + Math.abs(Math.sin(time * 3)) * 0.15;
                 group.scale.set(beatScale, beatScale, beatScale);
 
-                // Vandiep
                 for(let i=0; i<count; i++) {
                     colors[i*3] = baseColor.r; colors[i*3+1] = baseColor.g; colors[i*3+2] = baseColor.b;
                     if (i % 3 === 0) sizes[i] = baseSize;
@@ -386,11 +384,11 @@
                 group.geometry.attributes.size.needsUpdate = true;
 
             } else {
-                // EXPLODE
+                // EXPLODE & PHOTO
                 group.scale.set(1,1,1);
-                group.rotation.y += (handRotY - group.rotation.y) * 0.1;
+                // Xoay nhẹ theo thời gian ở chế độ nổ
+                group.rotation.y = time * 0.1;
 
-                // size, color
                 for(let i=0; i<count; i++) {
                     sizes[i] = baseSize;
                     let brightness = 1.0;
@@ -437,19 +435,31 @@
 
             } else if (state === 'EXPLODE') {
                 titleMesh.visible = false; starMesh.visible = false; loveMesh.visible = false;
-                const baseAngle = groupGold.rotation.y; 
+                
+                // --- [ĐÃ SỬA] Ảnh tự xoay quanh trục ---
+                const rotationSpeed = 0.4; // Tốc độ xoay (0.4 là vừa phải)
+                const baseAngle = time * rotationSpeed; 
                 const angleStep = (Math.PI * 2) / 5;
+                
                 let bestIdx = 0; let maxZ = -999;
+                
                 photoMeshes.forEach((mesh, i) => {
                     mesh.visible = true;
+                    // Tính góc xoay liên tục theo thời gian
                     const angle = baseAngle + i * angleStep;
                     const x = Math.sin(angle) * CONFIG.photoOrbitRadius;
                     const z = Math.cos(angle) * CONFIG.photoOrbitRadius;
-                    const y = Math.sin(time + i) * 3; 
+                    // Thêm hiệu ứng nhấp nhô lên xuống (floating)
+                    const y = Math.sin(time * 1.5 + i) * 3; 
+
                     mesh.position.lerp(new THREE.Vector3(x, y, z), 0.1);
+                    
+                    // Ảnh luôn hướng mặt về Camera
                     mesh.lookAt(camera.position);
+
+                    // Logic phóng to ảnh khi lại gần
                     if (z > maxZ) { maxZ = z; bestIdx = i; }
-                    if (z > 5) { 
+                    if (z > 10) { // Khi ảnh bay gần camera hơn
                         const ds = 1.0 + (z/CONFIG.photoOrbitRadius)*0.8; 
                         mesh.scale.lerp(new THREE.Vector3(ds, ds, ds), 0.1);
                     } else {
@@ -462,8 +472,9 @@
                 loveMesh.visible = false;
                 photoMeshes.forEach((mesh, i) => {
                     if (i === selectedIndex) {
-                        mesh.position.lerp(new THREE.Vector3(0, 0, 60), 0.1);
-                        mesh.scale.lerp(new THREE.Vector3(5, 5, 5), 0.1);
+                        // Kéo ảnh vào giữa
+                        mesh.position.lerp(new THREE.Vector3(0, 0, 100), 0.1); // Đẩy ảnh lại gần hơn một chút
+                        mesh.scale.lerp(new THREE.Vector3(6, 6, 6), 0.1); // Phóng to hơn chút nữa
                         mesh.lookAt(camera.position); mesh.rotation.z = 0;
                     } else {
                         mesh.scale.lerp(new THREE.Vector3(0,0,0), 0.1);
